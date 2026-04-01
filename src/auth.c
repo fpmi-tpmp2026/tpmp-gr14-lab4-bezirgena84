@@ -2,24 +2,30 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdbool.h>
-#include <openssl/sha.h>
+#include <openssl/evp.h>
 #include "../includes/auth.h"
 #include "../includes/database.h"
 
-static User current_user = {"", "", 0};
+static User current_user = {0};
 static bool authenticated = false;
 
 void hash_password(const char* password, char* output) {
-    unsigned char hash[SHA256_DIGEST_LENGTH];
-    SHA256_CTX sha256;
-    SHA256_Init(&sha256);
-    SHA256_Update(&sha256, password, strlen(password));
-    SHA256_Final(hash, &sha256);
+    unsigned char hash[EVP_MAX_MD_SIZE];
+    unsigned int hash_len;
     
-    for(int i = 0; i < SHA256_DIGEST_LENGTH; i++) {
+    EVP_MD_CTX* ctx = EVP_MD_CTX_new();
+    const EVP_MD* md = EVP_sha256();
+    
+    EVP_DigestInit_ex(ctx, md, NULL);
+    EVP_DigestUpdate(ctx, password, strlen(password));
+    EVP_DigestFinal_ex(ctx, hash, &hash_len);
+    
+    EVP_MD_CTX_free(ctx);
+    
+    for(unsigned int i = 0; i < hash_len; i++) {
         sprintf(output + (i * 2), "%02x", hash[i]);
     }
-    output[64] = '\0';
+    output[hash_len * 2] = '\0';
 }
 
 bool authenticate(const char* username, const char* password) {
@@ -64,4 +70,8 @@ void set_current_user(const char* username) {
 
 const char* get_current_user(void) {
     return current_user.username;
+}
+
+int get_current_user_is_admin(void) {
+    return current_user.is_admin;
 }

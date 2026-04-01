@@ -1,63 +1,28 @@
-# Конфигурация компилятора
 CC = gcc
 CFLAGS = -Wall -Wextra -std=c11 -Iincludes -g
 LDFLAGS = -lsqlite3 -lssl -lcrypto
 
-# Директории
-SRC_DIR = src
-INC_DIR = includes
-BUILD_DIR = build
-BIN_DIR = bin
+SRCDIR = src
+INCDIR = includes
+BUILDDIR = build
+BINDIR = bin
 
-# Исходные файлы
-SRCS = $(SRC_DIR)/main.c \
-       $(SRC_DIR)/auth.c \
-       $(SRC_DIR)/database.c \
-       $(SRC_DIR)/country.c \
-       $(SRC_DIR)/region.c
+SOURCES = $(wildcard $(SRCDIR)/*.c)
+OBJECTS = $(patsubst $(SRCDIR)/%.c,$(BUILDDIR)/%.o,$(SOURCES))
+TARGET = $(BINDIR)/country_manager
 
-# Объектные файлы
-OBJS = $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/%.o,$(SRCS))
-
-# Имя исполняемого файла
-TARGET = $(BIN_DIR)/country_app
-
-# Цели по умолчанию
 all: directories $(TARGET)
 
-# Создание директорий
 directories:
-	@mkdir -p $(BUILD_DIR) $(BIN_DIR)
+	mkdir -p $(BINDIR) $(BUILDDIR)
 
-# Линковка
-$(TARGET): $(OBJS)
-	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
-	@echo "✓ Сборка завершена: $(TARGET)"
+$(TARGET): $(OBJECTS)
+	$(CC) $^ -o $@ $(LDFLAGS)
 
-# Компиляция исходных файлов
-$(BUILD_DIR)/%.o: $(SRC_DIR)/%.c
-	$(CC) $(CFLAGS) -c -o $@ $<
+$(BUILDDIR)/%.o: $(SRCDIR)/%.c
+	$(CC) $(CFLAGS) -c $< -o $@
 
-# Очистка
 clean:
-	rm -rf $(BUILD_DIR)/*.o $(TARGET)
-	@echo "✓ Очистка завершена"
+	rm -rf $(BINDIR)/* $(BUILDDIR)/*
 
-# Полная пересборка
-rebuild: clean all
-
-# Запуск приложения
-run: all
-	./$(TARGET)
-
-# Тестирование
-test: all
-	@echo "Запуск тестов..."
-	./$(TARGET)
-
-# Установка зависимостей (для Linux)
-install-deps:
-	@echo "Установка зависимостей..."
-	@sudo apt-get update && sudo apt-get install -y libsqlite3-dev libssl-dev
-
-.PHONY: all directories clean rebuild run test install-deps
+.PHONY: all clean directories

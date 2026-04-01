@@ -2,30 +2,16 @@
 #define DATABASE_H
 
 #include <sqlite3.h>
-#include <stdio.h>
-#include <stdlib.h>
+#include <stdbool.h>
 
-// Инициализация подключения к БД
-int db_init(sqlite3 **db, const char *filename);
+// Database connection
+extern sqlite3* db;
 
-// Закрытие подключения к БД
-void db_close(sqlite3 *db);
+// Function declarations
+bool init_database(void);
+void close_database(void);
+bool execute_query(const char* sql);
+int callback_select(void* data, int argc, char** argv, char** azColName);
+bool table_exists(const char* table_name);
 
-// Выполнение запроса без возврата результатов
-int db_execute(sqlite3 *db, const char *sql);
-
-// Выполнение запроса с колбэком для обработки результатов
-int db_query(sqlite3 *db, const char *sql, 
-             int (*callback)(void*, int, char**, char**), 
-             void *data);
-
-// Подготовка и выполнение параметризованного запроса
-int db_prepare_exec(sqlite3 *db, const char *sql, const char *types, ...);
-
-// Получение последнего вставленного ID
-long long db_last_insert_id(sqlite3 *db);
-
-// Инициализация тестовых данных
-int db_init_test_data(sqlite3 *db);
-
-#endif // DATABASE_H
+#endif

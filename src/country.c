@@ -1,220 +1,135 @@
-#include "country.h"
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#include <sqlite3.h>
+#include "../includes/country.h"
+#include "../includes/database.h"
 
-bool country_create(sqlite3 *db, Country *country) {
-    const char *sql = "INSERT INTO country (name, capital, language, population_country, square_country, currency, head_country, flag_image) VALUES (?, ?, ?, ?, ?, ?, ?, ?);";
-    sqlite3_stmt *stmt;
+bool add_country(const char* name, const char* capital, long long population, const char* flag_image) {
+    sqlite3_stmt* stmt;
     
-    if (sqlite3_prepare_v2(db, sql, -1, &stmt, NULL) != SQLITE_OK) {
+    const char* insert_sql = "INSERT INTO countries (name, capital, population, flag_image) VALUES (?, ?, ?, ?)";
+    int rc = sqlite3_prepare_v2(db, insert_sql, -1, &stmt, 0);
+    
+    if (rc != SQLITE_OK) {
+        fprintf(stderr, "Failed to prepare statement: %s\n", sqlite3_errmsg(db));
         return false;
     }
     
-    sqlite3_bind_text(stmt, 1, country->name, -1, SQLITE_STATIC);
-    sqlite3_bind_text(stmt, 2, country->capital, -1, SQLITE_STATIC);
-    sqlite3_bind_text(stmt, 3, country->language, -1, SQLITE_STATIC);
-    sqlite3_bind_int64(stmt, 4, country->population);
-    sqlite3_bind_double(stmt, 5, country->square);
-    sqlite3_bind_text(stmt, 6, country->currency, -1, SQLITE_STATIC);
-    sqlite3_bind_text(stmt, 7, country->head, -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 1, name, -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 2, capital, -1, SQLITE_STATIC);
+    sqlite3_bind_int64(stmt, 3, population);
+    sqlite3_bind_text(stmt, 4, flag_image, -1, SQLITE_STATIC);
     
-    if (country->flag_image && country->flag_size > 0) {
-        sqlite3_bind_blob(stmt, 8, country->flag_image, country->flag_size, SQLITE_STATIC);
-    } else {
-        sqlite3_bind_null(stmt, 8);
-    }
-    
-    int rc = sqlite3_step(stmt);
-    if (rc == SQLITE_DONE) {
-        country->id = sqlite3_last_insert_rowid(db);
-    }
-    
+    rc = sqlite3_step(stmt);
     sqlite3_finalize(stmt);
-    return rc == SQLITE_DONE;
-}
-
-bool country_get_by_id(sqlite3 *db, int id, Country *country) {
-    const char *sql = "SELECT id, name, capital, language, population_country, square_country, currency, head_country FROM country WHERE id = ?;";
-    sqlite3_stmt *stmt;
     
-    if (sqlite3_prepare_v2(db, sql, -1, &stmt, NULL) != SQLITE_OK) {
+    if (rc != SQLITE_DONE) {
+        fprintf(stderr, "Failed to insert country: %s\n", sqlite3_errmsg(db));
         return false;
     }
     
-    sqlite3_bind_int(stmt, 1, id);
-    
-    bool found = false;
-    if (sqlite3_step(stmt) == SQLITE_ROW) {
-        country->id = sqlite3_column_int(stmt, 0);
-        strncpy(country->name, (const char*)sqlite3_column_text(stmt, 1), 100);
-        strncpy(country->capital, (const char*)sqlite3_column_text(stmt, 2), 100);
-        strncpy(country->language, (const char*)sqlite3_column_text(stmt, 3), 50);
-        country->population = sqlite3_column_int64(stmt, 4);
-        country->square = sqlite3_column_double(stmt, 5);
-        strncpy(country->currency, (const char*)sqlite3_column_text(stmt, 6), 3);
-        strncpy(country->head, (const char*)sqlite3_column_text(stmt, 7), 100);
-        found = true;
-    }
-    
-    sqlite3_finalize(stmt);
-    return found;
+    printf("Country '%s' added successfully!\n", name);
+    return true;
 }
 
-int country_get_all(sqlite3 *db, Country **countries) {
-    const char *sql = "SELECT id, name, capital, language, population_country, square_country, currency, head_country FROM country;";
-    sqlite3_stmt *stmt;
-    
-    if (sqlite3_prepare_v2(db, sql, -1, &stmt, NULL) != SQLITE_OK) {
-        return -1;
-    }
-    
-    // Подсчет количества стран
-    int count = 0;
-    while (sqlite3_step(stmt) == SQLITE_ROW) count++;
-    sqlite3_reset(stmt);
-    
-    if (count == 0) {
-        sqlite3_finalize(stmt);
-        *countries = NULL;
-        return 0;
-    }
-    
-    *countries = calloc(count, sizeof(Country));
-    if (!*countries) {
-        sqlite3_finalize(stmt);
-        return -1;
-    }
-    
-    int i = 0;
-    while (sqlite3_step(stmt) == SQLITE_ROW && i < count) {
-        Country *c = &(*countries)[i++];
-        c->id = sqlite3_column_int(stmt, 0);
-        strncpy(c->name, (const char*)sqlite3_column_text(stmt, 1), 100);
-        strncpy(c->capital, (const char*)sqlite3_column_text(stmt, 2), 100);
-        strncpy(c->language, (const char*)sqlite3_column_text(stmt, 3), 50);
-        c->population = sqlite3_column_int64(stmt, 4);
-        c->square = sqlite3_column_double(stmt, 5);
-        strncpy(c->currency, (const char*)sqlite3_column_text(stmt, 6), 3);
-        strncpy(c->head, (const char*)sqlite3_column_text(stmt, 7), 100);
-    }
-    
-    sqlite3_finalize(stmt);
-    return count;
-}
-
-bool country_update(sqlite3 *db, Country *country) {
-    const char *sql = "UPDATE country SET name=?, capital=?, language=?, population_country=?, square_country=?, currency=?, head_country=? WHERE id=?;";
-    sqlite3_stmt *stmt;
-    
-    if (sqlite3_prepare_v2(db, sql, -1, &stmt, NULL) != SQLITE_OK) {
-        return false;
-    }
-    
-    sqlite3_bind_text(stmt, 1, country->name, -1, SQLITE_STATIC);
-    sqlite3_bind_text(stmt, 2, country->capital, -1, SQLITE_STATIC);
-    sqlite3_bind_text(stmt, 3, country->language, -1, SQLITE_STATIC);
-    sqlite3_bind_int64(stmt, 4, country->population);
-    sqlite3_bind_double(stmt, 5, country->square);
-    sqlite3_bind_text(stmt, 6, country->currency, -1, SQLITE_STATIC);
-    sqlite3_bind_text(stmt, 7, country->head, -1, SQLITE_STATIC);
-    sqlite3_bind_int(stmt, 8, country->id);
-    
-    int rc = sqlite3_step(stmt);
-    sqlite3_finalize(stmt);
-    return rc == SQLITE_DONE;
-}
-
-bool country_delete(sqlite3 *db, int id) {
-    // CASCADE удалит регионы автоматически
-    const char *sql = "DELETE FROM country WHERE id = ?;";
-    return db_prepare_exec(db, sql, "i", id) == SQLITE_DONE;
-}
-
-// Callback для получения регионов
-static int get_regions_callback(void *data, int argc, char **argv, char **azColName) {
-    Region **regions = (Region**)data;
-    int *count = (int*)(regions + 1);
-    
-    Region *r = &(*regions)[*count];
-    r->id = atoi(argv[0]);
-    strncpy(r->name, argv[1], 100);
-    strncpy(r->capital, argv[2], 100);
-    r->population = atoll(argv[3]);
-    r->square = atof(argv[4]);
-    r->country_id = atoi(argv[5]);
-    
-    (*count)++;
-    return 0;
-}
-
-int country_get_regions(sqlite3 *db, int country_id, void **regions) {
-    // Сначала считаем количество
-    char sql_count[256];
-    snprintf(sql_count, sizeof(sql_count), 
-             "SELECT COUNT(*) FROM region WHERE country_id = %d;", country_id);
-    
-    sqlite3_stmt *stmt;
-    if (sqlite3_prepare_v2(db, sql_count, -1, &stmt, NULL) != SQLITE_OK) {
-        return -1;
-    }
-    
-    int count = 0;
-    if (sqlite3_step(stmt) == SQLITE_ROW) {
-        count = sqlite3_column_int(stmt, 0);
-    }
-    sqlite3_finalize(stmt);
-    
-    if (count == 0) {
-        *regions = NULL;
-        return 0;
-    }
-    
-    // Выделяем память и получаем данные
-    *regions = calloc(count, sizeof(Region));
-    if (!*regions) return -1;
-    
-    char sql[512];
-    snprintf(sql, sizeof(sql),
-             "SELECT id, name, capital_region, population_region, square_region, country_id FROM region WHERE country_id = %d;",
-             country_id);
-    
-    int idx = 0;
-    sqlite3_prepare_v2(db, sql, -1, &stmt, NULL);
-    while (sqlite3_step(stmt) == SQLITE_ROW && idx < count) {
-        Region *r = &((Region*)*regions)[idx++];
-        r->id = sqlite3_column_int(stmt, 0);
-        strncpy(r->name, (const char*)sqlite3_column_text(stmt, 1), 100);
-        strncpy(r->capital, (const char*)sqlite3_column_text(stmt, 2), 100);
-        r->population = sqlite3_column_int64(stmt, 3);
-        r->square = sqlite3_column_double(stmt, 4);
-        r->country_id = sqlite3_column_int(stmt, 5);
-    }
-    sqlite3_finalize(stmt);
-    
-    return count;
-}
-
-double country_get_avg_region_population(sqlite3 *db, int country_id) {
+bool delete_country(int country_id) {
     char sql[256];
-    snprintf(sql, sizeof(sql),
-             "SELECT AVG(population_region) FROM region WHERE country_id = %d;", country_id);
+    sprintf(sql, "DELETE FROM countries WHERE id = %d", country_id);
     
-    sqlite3_stmt *stmt;
-    if (sqlite3_prepare_v2(db, sql, -1, &stmt, NULL) != SQLITE_OK) {
-        return -1;
+    if (execute_query(sql)) {
+        printf("Country with ID %d deleted successfully!\n", country_id);
+        return true;
+    }
+    return false;
+}
+
+bool update_country(int country_id, const char* name, const char* capital, long long population) {
+    char sql[1024];
+    sprintf(sql, "UPDATE countries SET name='%s', capital='%s', population=%lld WHERE id=%d",
+            name, capital, population, country_id);
+    
+    if (execute_query(sql)) {
+        printf("Country with ID %d updated successfully!\n", country_id);
+        return true;
+    }
+    return false;
+}
+
+void list_countries(void) {
+    char sql[] = "SELECT id, name, capital, population FROM countries";
+    sqlite3_stmt* stmt;
+    int rc = sqlite3_prepare_v2(db, sql, -1, &stmt, 0);
+    
+    if (rc != SQLITE_OK) {
+        fprintf(stderr, "Failed to prepare statement: %s\n", sqlite3_errmsg(db));
+        return;
     }
     
-    double avg = 0;
-    if (sqlite3_step(stmt) == SQLITE_ROW && sqlite3_column_type(stmt, 0) != SQLITE_NULL) {
-        avg = sqlite3_column_double(stmt, 0);
+    printf("\n=== Countries ===\n");
+    printf("%-5s %-30s %-20s %-15s\n", "ID", "Name", "Capital", "Population");
+    printf("--------------------------------------------------------\n");
+    
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+        int id = sqlite3_column_int(stmt, 0);
+        const char* name = (const char*)sqlite3_column_text(stmt, 1);
+        const char* capital = (const char*)sqlite3_column_text(stmt, 2);
+        long long population = sqlite3_column_int64(stmt, 3);
+        
+        printf("%-5d %-30s %-20s %-15lld\n", id, name, capital, population);
+    }
+    printf("\n");
+    
+    sqlite3_finalize(stmt);
+}
+
+Country* get_country_by_id(int country_id) {
+    char sql[256];
+    sprintf(sql, "SELECT id, name, capital, population, flag_image FROM countries WHERE id=%d", country_id);
+    
+    sqlite3_stmt* stmt;
+    int rc = sqlite3_prepare_v2(db, sql, -1, &stmt, 0);
+    
+    if (rc != SQLITE_OK) {
+        return NULL;
+    }
+    
+    if (sqlite3_step(stmt) == SQLITE_ROW) {
+        Country* country = (Country*)malloc(sizeof(Country));
+        country->id = sqlite3_column_int(stmt, 0);
+        strcpy(country->name, (const char*)sqlite3_column_text(stmt, 1));
+        strcpy(country->capital, (const char*)sqlite3_column_text(stmt, 2));
+        country->population = sqlite3_column_int64(stmt, 3);
+        const char* flag = (const char*)sqlite3_column_text(stmt, 4);
+        if (flag) strcpy(country->flag_image, flag);
+        else country->flag_image[0] = '\0';
+        
+        sqlite3_finalize(stmt);
+        return country;
     }
     
     sqlite3_finalize(stmt);
-    return avg;
+    return NULL;
 }
 
-void country_free(Country *country) {
-    if (country && country->flag_image) {
-        free(country->flag_image);
-        country->flag_image = NULL;
+long long get_total_population_all_countries(void) {
+    char sql[] = "SELECT SUM(population) FROM countries";
+    sqlite3_stmt* stmt;
+    int rc = sqlite3_prepare_v2(db, sql, -1, &stmt, 0);
+    
+    if (rc != SQLITE_OK) {
+        return 0;
     }
+    
+    long long total = 0;
+    if (sqlite3_step(stmt) == SQLITE_ROW) {
+        total = sqlite3_column_int64(stmt, 0);
+    }
+    
+    sqlite3_finalize(stmt);
+    return total;
+}
+
+void free_country(Country* country) {
+    if (country) free(country);
 }
